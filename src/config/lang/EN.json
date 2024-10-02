@@ -1,0 +1,40 @@
+{
+    "START": "Welcome to Anonymous Chat\n\n/find to find a chat partner\n/next to stop chatting and find another partner\n/stop to stop chatting\n/exit to stop searching for a chat partner\n\n/ping to check bot status\n/users to see current active users\n\n/contribute to contribute to the project/report bugs",
+    "HELP": "/find to find a chat partner\n/next to stop chatting and find another partner\n/stop to stop chatting\n/exit to stop searching for a chat partner\n\n/contribute to contribute to the project/report bugs",
+    "CONTRIBUTE": "If you want to contribute to the bot\n\nsuch as:\n- adding features\n- reporting bugs\n- etc\n\nyou can pull request or create an issue on GitHub",
+    "PING": "Pongg 🏓",
+    "CREATE_ROOM": {
+        "SUCCESS_1": "Chat partner found"
+    },
+    "FIND": {
+        
+        "WARNING_1": "You are already in the Queue",
+        "WARNING_2": "You are already in a chat",
+        "LOADING": "Searching for a partner..."
+    },
+    "NEXT": {
+        "SUCCESS_1": "You have left the conversation",
+        "SUCCESS_2": "Your partner has ended the conversation",
+        "WARNING_1": "You don't have a chat partner\n\n/find to search for a chat partner"
+    },
+    "STOP": {
+        "SUCCESS_1": "You have left the conversation",
+        "SUCCESS_2": "Your partner has ended the conversation",
+        "WARNING_1": "You don't have a chat partner\n\n/find to search for a chat partner"
+    },
+    "EXIT": {
+        "SUCCESS_1": "Searching for a chat partner has been stopped",
+        "WARNING_1": "You are not in the queue"
+    },
+    "CONNECT": {
+        "WARNING_1": "You don't have a chat partner\n\n/find to search for a chat partner"
+    },
+    "USER_SEND_PHOTO": {
+        "WARNING_1": "ℹ️INFO \nYour partner sent a photo, do you want to open it?\n\n⚠️ATTENTION! \nThe photo sent may not be appropriate to view"
+    },
+    "USER_SEND_VIDEO": {
+        "WARNING_1": "ℹ️INFO \nYour partner sent a video, do you want to open it?\n\n⚠️ATTENTION! \nThe video sent may not be appropriate to view"
+    },
+    "ACTIVE_USER": "Currently, there are ${totalUser} people using anonymous-chat.\n\nQueue: ${totalUserInQueue}\nConversations: ${totalUserInRoom}",
+    "ERROR": "Error"
+}
