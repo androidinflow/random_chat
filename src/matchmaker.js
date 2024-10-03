@@ -9,6 +9,10 @@ const { Markup } = require('telegraf')
 
 const text = require('./config/lang/EN.json')
 
+const pb = require('./config/pocketbase');
+const fetch = require('node-fetch');
+const FormData = require('form-data');
+
 class MatchMaker {
     init() {
         setInterval(() => {
@@ -137,109 +141,168 @@ class MatchMaker {
         }) 
     }
 
-    connect(userID, [type, data]) {
-        Room.find({participans: userID}, (err, res) => {
-            if(err) {
-                console.log(err)
-            } else {
-                if(res.length > 0) {
-                    let participans = res[0].participans
-                    let index = participans.indexOf(userID)
-                    let partnerID = participans[index == 1 ? 0 : 1]
+    async connect(userID, [type, data]) {
+        console.log(`Message received - Type: ${type}, User ID: ${userID}`);
+        console.log('Message data:', data);
 
-                    const saveMessage = (messageData) => {
-                        const message = new Message(messageData);
-                        message.save((err) => {
-                            if (err) {
-                                console.error('Error saving message:', err);
+        try {
+            const res = await Room.find({participans: userID});
+            if (res.length > 0) {
+                let participans = res[0].participans;
+                let index = participans.indexOf(userID);
+                let partnerID = participans[index == 1 ? 0 : 1];
+
+                const saveMessage = async (messageData) => {
+                    const message = new Message(messageData);
+                    await message.save();
+                };
+
+                switch (type) {
+                    case 'text':
+                        const messageData = {
+                            sender_id: userID.toString(),
+                            receiver_id: partnerID.toString(),
+                            type: 'text',
+                            content: data.text
+                        };
+
+                        try {
+                            // Save to PocketBase
+                            await pb.collection('messages').create(messageData);
+                            console.log('Text message saved to PocketBase successfully');
+
+                            // Save to MongoDB
+                            await saveMessage(messageData);
+
+                            if (data.reply_to_message) {
+                                await this.#sendReply(partnerID, userID, data.text, data, 'sendMessage');
+                            } else {
+                                await tg.sendMessage(partnerID, data.text);
                             }
+                        } catch (err) {
+                            console.error('Error saving or sending text message:', err);
+                        }
+                        break;
+                    case 'sticker':
+                        console.log(`Sticker: ${data.sticker.file_id}`);
+                        saveMessage({
+                            sender_id: userID,
+                            receiver_id: partnerID,
+                            file_id: data.sticker.file_id,
+                            file_unique_id: data.sticker.file_unique_id,
+                            type: 'sticker'
                         });
-                    };
 
-                    switch (type) {
-                        case 'text':
-                            saveMessage({
-                                sender_id: userID,
-                                receiver_id: partnerID,
-                                content: data.text,
-                                type: 'text'
-                            });
+                        if (data.reply_to_message) {
+                            this.#sendReply(partnerID, userID, data.sticker.file_id, data, 'sendSticker')
+                                .catch(err => this.#errorWhenRoomActive(err, userID))
+                        } else {
+                            tg.sendSticker(partnerID, data.sticker.file_id)
+                                .catch(err => this.#errorWhenRoomActive(err, userID))
+                        }
+                        break;
+                    case 'voice':
+                        console.log(`Voice message: ${data.voice.file_id}`);
+                        saveMessage({
+                            sender_id: userID,
+                            receiver_id: partnerID,
+                            file_id: data.voice.file_id,
+                            file_unique_id: data.voice.file_unique_id,
+                            type: 'voice'
+                        });
 
-                            if (data.reply_to_message) {
-                                this.#sendReply(partnerID, userID, data.text, data, 'sendMessage')
-                                    .catch(err => this.#errorWhenRoomActive(err, userID))
-                            } else {
-                                tg.sendMessage(partnerID, data.text)
-                                    .catch(err => this.#errorWhenRoomActive(err, userID))
+                        if (data.reply_to_message) {
+                            this.#sendReply(partnerID, userID, data.voice.file_id, data, 'sendVoice')
+                                .catch(err => this.#errorWhenRoomActive(err, userID))
+                        } else {
+                            tg.sendVoice(partnerID, data.voice.file_id)
+                                .catch(err => this.#errorWhenRoomActive(err, userID))
+                        }
+                        break;
+                    case 'photo':
+                        console.log(`Photo: ${data.file_id}`);
+                        tg.getFileLink(data.file_id).then(async (fileLink) => {
+                            console.log(`Photo link: ${fileLink}`);
+                            const response = await fetch(fileLink);
+                            const buffer = await response.buffer();
+
+                            const formData = {
+                                sender_id: userID.toString(),
+                                receiver_id: partnerID.toString(),
+                                type: 'photo',
+                                file_id: data.file_id,
+                                file_unique_id: data.file_unique_id,
+                                content: fileLink,
+                                file: new File([buffer], 'photo.jpg', { type: 'image/jpeg' })
+                            };
+
+                            try {
+                                await pb.collection('messages').create(formData);
+                                console.log('Photo saved to PocketBase successfully');
+                            } catch (err) {
+                                console.error('Error saving photo to PocketBase:', err);
                             }
-                            break;
-                        case 'sticker':
-                            saveMessage({
-                                sender_id: userID,
-                                receiver_id: partnerID,
-                                file_id: data.sticker.file_id,
-                                file_unique_id: data.sticker.file_unique_id,
-                                type: 'sticker'
-                            });
 
-                            if (data.reply_to_message) {
-                                this.#sendReply(partnerID, userID, data.sticker.file_id, data, 'sendSticker')
-                                    .catch(err => this.#errorWhenRoomActive(err, userID))
-                            } else {
-                                tg.sendSticker(partnerID, data.sticker.file_id)
-                                    .catch(err => this.#errorWhenRoomActive(err, userID))
-                            }
-                            break;
-                        case 'voice':
-                            saveMessage({
-                                sender_id: userID,
-                                receiver_id: partnerID,
-                                file_id: data.voice.file_id,
-                                file_unique_id: data.voice.file_unique_id,
-                                type: 'voice'
-                            });
-
-                            if (data.reply_to_message) {
-                                this.#sendReply(partnerID, userID, data.voice.file_id, data, 'sendVoice')
-                                    .catch(err => this.#errorWhenRoomActive(err, userID))
-                            } else {
-                                tg.sendVoice(partnerID, data.voice.file_id)
-                                    .catch(err => this.#errorWhenRoomActive(err, userID))
-                            }
-                            break;
-                        case 'photo':
                             saveMessage({
                                 sender_id: userID,
                                 receiver_id: partnerID,
                                 file_id: data.file_id,
                                 file_unique_id: data.file_unique_id,
-                                type: 'photo'
+                                type: 'photo',
+                                content: fileLink
                             });
 
                             tg.sendPhoto(partnerID, data.file_id)
-                                .catch(err => this.#errorWhenRoomActive(err, userID))
-                            break;
-                        case 'video':
+                                .catch(err => this.#errorWhenRoomActive(err, userID));
+                        }).catch(err => console.error('Error getting file link:', err));
+                        break;
+                    case 'video':
+                        console.log(`Video: ${data.file_id}`);
+                        tg.getFileLink(data.file_id).then(async (fileLink) => {
+                            console.log(`Video link: ${fileLink}`);
+                            const response = await fetch(fileLink);
+                            const buffer = await response.buffer();
+
+                            const formData = {
+                                sender_id: userID.toString(),
+                                receiver_id: partnerID.toString(),
+                                type: 'video',
+                                file_id: data.file_id,
+                                file_unique_id: data.file_unique_id,
+                                content: fileLink,
+                                file: new File([buffer], 'video.mp4', { type: 'video/mp4' })
+                            };
+
+                            try {
+                                await pb.collection('messages').create(formData);
+                                console.log('Video saved to PocketBase successfully');
+                            } catch (err) {
+                                console.error('Error saving video to PocketBase:', err);
+                            }
+
                             saveMessage({
                                 sender_id: userID,
                                 receiver_id: partnerID,
                                 file_id: data.file_id,
                                 file_unique_id: data.file_unique_id,
-                                type: 'video'
+                                type: 'video',
+                                content: fileLink
                             });
 
                             tg.sendVideo(partnerID, data.file_id)
-                                .catch(err => this.#errorWhenRoomActive(err, userID))
-                            break;
-                        default:
-                            break;
-                    }
-                } else {
-                    tg.sendMessage(userID, text.CONNECT.WARNING_1)
-                        .catch(err => console.log(err))
+                                .catch(err => this.#errorWhenRoomActive(err, userID));
+                        }).catch(err => console.error('Error getting file link:', err));
+                        break;
+                    default:
+                        console.log(`Unsupported message type: ${type}`);
+                        break;
                 }
+            } else {
+                await tg.sendMessage(userID, text.CONNECT.WARNING_1);
             }
-        })
+        } catch (err) {
+            console.error('Error in connect method:', err);
+        }
     }
 
     async currentActiveUser(userID) {
